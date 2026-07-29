@@ -1,0 +1,47 @@
+name: Deploy
+
+# Runs on the NUC self-hosted runner after CI succeeds on main.
+# GitHub-hosted runners cannot reach the LAN — see .github/DEPLOY.md.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to NUC
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, ourtable, production]
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: /home/nikhil/apps/ourtable
+
+    steps:
+      - name: Pull latest main
+        run: |
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+      - name: Rebuild and restart stack
+        run: docker compose -f docker-compose.prod.yml up -d --build
+
+      - name: Show status
+        run: docker compose -f docker-compose.prod.yml ps -a
+
+      - name: Tail recent logs
+        run: |
+          docker compose -f docker-compose.prod.yml logs migrate --tail 30 || true
+          docker compose -f docker-compose.prod.yml logs app --tail 20
+          docker compose -f docker-compose.prod.yml logs worker --tail 20
