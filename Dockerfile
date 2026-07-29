@@ -56,4 +56,5 @@ FROM base AS worker
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY worker ./worker
-CMD ["node", "--experimental-strip-types", "worker/scheduler.ts"]
+# tsx resolves .ts imports reliably (strip-types + ESM needs explicit extensions).
+CMD ["npx", "tsx", "worker/scheduler.ts"]
