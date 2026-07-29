@@ -1,0 +1,90 @@
+# Production / LAN host stack (HLD §7).
+# Usage on the server:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml run --rm migrate
+#
+# Keep a real `.env` on the host (never commit it). AUTH_BYPASS must be false.
+
+services:
+  app:
+    build:
+      context: .
+      target: production
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourtable}:${POSTGRES_PASSWORD:-ourtable}@db:5432/${POSTGRES_DB:-ourtable}
+      AUTH_BYPASS: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ourtable}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ourtable}
+      POSTGRES_DB: ${POSTGRES_DB:-ourtable}
+    # LAN-only: bind Postgres to localhost on the host so it isn't open on the LAN.
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-ourtable} -d ${POSTGRES_DB:-ourtable}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: worker
+    env_file:
+      - .env
+    environment:
+      APP_URL: http://app:3000
+      CRON_COMPLETE_PLANNED: ${CRON_COMPLETE_PLANNED:-0 * * * *}
+      CRON_CLEANUP_ORPHAN_PHOTOS: ${CRON_CLEANUP_ORPHAN_PHOTOS:-0 4 * * *}
+    depends_on:
+      app:
+        condition: service_started
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot: apply Drizzle SQL migrations against `db`.
+  migrate:
+    profiles: ["migrate"]
+    image: node:22-bookworm-slim
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourtable}:${POSTGRES_PASSWORD:-ourtable}@db:5432/${POSTGRES_DB:-ourtable}
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./drizzle.config.ts:/app/drizzle.config.ts:ro
+      - ./db:/app/db:ro
+    command:
+      [
+        "bash",
+        "-lc",
+        "npm ci && npx drizzle-kit migrate",
+      ]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
