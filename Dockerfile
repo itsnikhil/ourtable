@@ -58,3 +58,10 @@ RUN npm ci
 COPY worker ./worker
 # tsx resolves .ts imports reliably (strip-types + ESM needs explicit extensions).
 CMD ["npx", "tsx", "worker/scheduler.ts"]
+
+# ---- Migrate (one-shot drizzle-kit; no npm ci at runtime) ----
+FROM base AS migrate
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json drizzle.config.ts ./
+COPY db ./db
+CMD ["./node_modules/.bin/drizzle-kit", "migrate"]

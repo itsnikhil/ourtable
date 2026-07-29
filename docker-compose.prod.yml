@@ -1,28 +1,12 @@
 # Production / LAN host stack (HLD §7).
-# Usage on the server:
+# Deploy (migrations run automatically before app/worker):
 #   docker compose -f docker-compose.prod.yml up -d --build
-#   docker compose -f docker-compose.prod.yml run --rm migrate
 #
 # Keep a real `.env` on the host (never commit it). AUTH_BYPASS must be false.
+# Prefer a URL-safe POSTGRES_PASSWORD (or set a full DATABASE_URL in .env) —
+# characters like /, +, = in the password break compose URL interpolation.
 
 services:
-  app:
-    build:
-      context: .
-      target: production
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ourtable}:${POSTGRES_PASSWORD:-ourtable}@db:5432/${POSTGRES_DB:-ourtable}
-      AUTH_BYPASS: "false"
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
   db:
     image: postgres:16
     environment:
@@ -45,6 +29,41 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # One-shot: apply pending Drizzle SQL migrations, then exit 0.
+  migrate:
+    build:
+      context: .
+      target: migrate
+    env_file:
+      - .env
+    environment:
+      # Built from POSTGRES_* so the hostname is always the compose service `db`.
+      # Use a URL-safe POSTGRES_PASSWORD (avoid /, +, =) or this URL breaks.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourtable}:${POSTGRES_PASSWORD:-ourtable}@db:5432/${POSTGRES_DB:-ourtable}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: production
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourtable}:${POSTGRES_PASSWORD:-ourtable}@db:5432/${POSTGRES_DB:-ourtable}
+      AUTH_BYPASS: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   worker:
     build:
       context: .
@@ -58,35 +77,13 @@ services:
       CRON_COMPLETE_PLANNED: "0 * * * *"
       CRON_CLEANUP_ORPHAN_PHOTOS: "0 4 * * *"
     depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       app:
         condition: service_started
-      db:
-        condition: service_healthy
     restart: unless-stopped
-
-  # One-shot: apply Drizzle SQL migrations against `db`.
-  migrate:
-    profiles: ["migrate"]
-    image: node:22-bookworm-slim
-    working_dir: /app
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ourtable}:${POSTGRES_PASSWORD:-ourtable}@db:5432/${POSTGRES_DB:-ourtable}
-    volumes:
-      - ./package.json:/app/package.json:ro
-      - ./package-lock.json:/app/package-lock.json:ro
-      - ./drizzle.config.ts:/app/drizzle.config.ts:ro
-      - ./db:/app/db:ro
-    command:
-      [
-        "bash",
-        "-lc",
-        "npm ci && ./node_modules/.bin/drizzle-kit migrate",
-      ]
-    depends_on:
-      db:
-        condition: service_healthy
 
 volumes:
   postgres_data:
