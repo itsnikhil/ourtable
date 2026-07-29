@@ -44,6 +44,9 @@ describe("photo domain (Step 5)", () => {
       m.getBypassAuthContext(),
     );
     bypassUserId = bypass.userId;
+    if (!bypass.householdId) {
+      throw new Error("AUTH_BYPASS: expected a household for tests");
+    }
     bypassHouseholdId = bypass.householdId;
 
     ({ createRestaurant } = await import("@/lib/actions/restaurant-actions"));

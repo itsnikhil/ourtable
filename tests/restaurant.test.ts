@@ -31,6 +31,9 @@ describe("restaurant domain (Step 4)", () => {
       m.getBypassAuthContext(),
     );
     bypassUserId = bypass.userId;
+    if (!bypass.householdId) {
+      throw new Error("AUTH_BYPASS: expected a household for tests");
+    }
     bypassHouseholdId = bypass.householdId;
 
     ({

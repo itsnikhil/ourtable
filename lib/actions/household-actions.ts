@@ -5,7 +5,15 @@ import { and, count, eq, gt } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { householdInvites, users } from "@/db/schema";
+import {
+  householdInvites,
+  households,
+  lists,
+  restaurants,
+  tags,
+  users,
+  visits,
+} from "@/db/schema";
 import { PENDING_INVITE_COOKIE, auth, requireAuthContext } from "@/lib/auth";
 import { fail, ok, type ActionResult } from "@/lib/errors";
 import { runAction } from "@/lib/action-utils";
@@ -16,6 +24,47 @@ import {
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const HOUSEHOLD_MEMBER_CAP = 2;
+
+/** Best-effort cleanup after a solo user leaves their household for an invite. */
+async function orphanAbandonedHousehold(householdId: string): Promise<void> {
+  await db
+    .delete(householdInvites)
+    .where(eq(householdInvites.householdId, householdId));
+  await db.delete(lists).where(eq(lists.householdId, householdId));
+
+  const [[restaurantCount], [tagCount], [visitCount]] = await Promise.all([
+    db
+      .select({ value: count() })
+      .from(restaurants)
+      .where(eq(restaurants.householdId, householdId)),
+    db
+      .select({ value: count() })
+      .from(tags)
+      .where(eq(tags.householdId, householdId)),
+    db
+      .select({ value: count() })
+      .from(visits)
+      .where(eq(visits.householdId, householdId)),
+  ]);
+
+  const hasChildData =
+    (restaurantCount?.value ?? 0) > 0 ||
+    (tagCount?.value ?? 0) > 0 ||
+    (visitCount?.value ?? 0) > 0;
+
+  if (!hasChildData) {
+    await db.delete(households).where(eq(households.id, householdId));
+  }
+}
+
+async function clearPendingInviteCookie(): Promise<void> {
+  try {
+    const jar = await cookies();
+    jar.delete(PENDING_INVITE_COOKIE);
+  } catch {
+    // No request cookie store outside Next.js (e.g. node:test).
+  }
+}
 
 export async function createHouseholdInvite(
   input: z.infer<typeof createInviteSchema> = {},
@@ -61,9 +110,13 @@ export async function acceptHouseholdInvite(
       return fail("UNAUTHORIZED", "You must be signed in.");
     }
 
-    if (session.user.householdId) {
-      return fail("CONFLICT", "You already belong to a household.");
-    }
+    const [dbUser] = await db
+      .select({ householdId: users.householdId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const currentHouseholdId = dbUser?.householdId ?? null;
 
     const [invite] = await db
       .select()
@@ -78,6 +131,29 @@ export async function acceptHouseholdInvite(
 
     if (!invite) {
       return fail("NOT_FOUND", "Invite not found or expired.");
+    }
+
+    if (currentHouseholdId === invite.householdId) {
+      await clearPendingInviteCookie();
+      return ok({ householdId: invite.householdId });
+    }
+
+    let abandonedHouseholdId: string | null = null;
+
+    if (currentHouseholdId) {
+      const [ownMemberCount] = await db
+        .select({ value: count() })
+        .from(users)
+        .where(eq(users.householdId, currentHouseholdId));
+
+      if ((ownMemberCount?.value ?? 0) >= 2) {
+        return fail(
+          "CONFLICT",
+          "You already belong to a household with another member.",
+        );
+      }
+
+      abandonedHouseholdId = currentHouseholdId;
     }
 
     const [memberCount] = await db
@@ -101,8 +177,11 @@ export async function acceptHouseholdInvite(
       .delete(householdInvites)
       .where(eq(householdInvites.id, invite.id));
 
-    const jar = await cookies();
-    jar.delete(PENDING_INVITE_COOKIE);
+    if (abandonedHouseholdId) {
+      await orphanAbandonedHousehold(abandonedHouseholdId);
+    }
+
+    await clearPendingInviteCookie();
 
     // Smart lists are seeded on household creation (first sign-up), not on accept.
     return ok({ householdId: invite.householdId });
