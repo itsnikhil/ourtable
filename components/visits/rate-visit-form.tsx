@@ -155,6 +155,9 @@ export function RateVisitForm({
     return true;
   }
 
+  const submitPayloadRef = useRef(submitPayload);
+  submitPayloadRef.current = submitPayload;
+
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
     const parsed = rateFormSchema.parse(values);
@@ -169,11 +172,11 @@ export function RateVisitForm({
     function onOnline() {
       const pending = pendingPayloadRef.current;
       if (!pending) return;
-      void submitPayload(pending);
+      void submitPayloadRef.current(pending);
     }
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [visitId]);
+  }, []);
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">

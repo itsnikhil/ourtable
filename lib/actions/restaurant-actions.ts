@@ -196,7 +196,8 @@ export async function updateRestaurant(
       return fail("NOT_FOUND", "Restaurant not found.");
     }
 
-    const { id, tagIds, newTagNames, forceCreate: _force, ...fields } = parsed;
+    const { id, tagIds, newTagNames, forceCreate, ...fields } = parsed;
+    void forceCreate;
 
     await db
       .update(restaurants)

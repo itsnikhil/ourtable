@@ -38,7 +38,7 @@ export async function getBypassAuthContext(): Promise<
   let userId = existing?.id;
   let householdId = existing?.householdId ?? null;
   let name = existing?.name || defaultName;
-  let image = existing?.image ?? null;
+  const image = existing?.image ?? null;
 
   if (!userId) {
     userId = createId();
