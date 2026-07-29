@@ -53,8 +53,8 @@ services:
       - .env
     environment:
       APP_URL: http://app:3000
-      CRON_COMPLETE_PLANNED: ${CRON_COMPLETE_PLANNED:-0 * * * *}
-      CRON_CLEANUP_ORPHAN_PHOTOS: ${CRON_CLEANUP_ORPHAN_PHOTOS:-0 4 * * *}
+      CRON_COMPLETE_PLANNED: ${CRON_COMPLETE_PLANNED:-"0 * * * *"}
+      CRON_CLEANUP_ORPHAN_PHOTOS: ${CRON_CLEANUP_ORPHAN_PHOTOS:-"0 4 * * *"}
     depends_on:
       app:
         condition: service_started

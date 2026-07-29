@@ -8,7 +8,7 @@
  * Startup: retry with exponential backoff if `app` isn't ready yet.
  */
 import cron from "node-cron";
-import { runOrphanPhotoCleanup } from "./cleanup-orphan-photos";
+import { runOrphanPhotoCleanup } from "./cleanup-orphan-photos.ts";
 
 const APP_URL = (process.env.APP_URL ?? "http://app:3000").replace(/\/$/, "");
 const TOKEN = process.env.INTERNAL_CRON_TOKEN ?? "";
@@ -76,6 +76,18 @@ console.log("[worker] scheduler starting", {
     cron: CRON_ORPHAN_PHOTOS,
   },
 });
+
+if (!cron.validate(CRON_PLANNED)) {
+  console.error("[worker] invalid CRON_COMPLETE_PLANNED:", CRON_PLANNED);
+  process.exit(1);
+}
+if (!cron.validate(CRON_ORPHAN_PHOTOS)) {
+  console.error(
+    "[worker] invalid CRON_CLEANUP_ORPHAN_PHOTOS:",
+    CRON_ORPHAN_PHOTOS,
+  );
+  process.exit(1);
+}
 
 void withBackoff("startup-planned", () =>
   hitCompletePlannedVisits("startup-planned"),
