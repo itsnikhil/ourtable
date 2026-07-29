@@ -11,8 +11,16 @@ import cron from "node-cron";
 
 const APP_URL = (process.env.APP_URL ?? "http://app:3000").replace(/\/$/, "");
 const TOKEN = process.env.INTERNAL_CRON_TOKEN ?? "";
-const CRON_PLANNED = process.env.CRON_COMPLETE_PLANNED ?? "0 * * * *";
-const CRON_ORPHAN_PHOTOS = process.env.CRON_CLEANUP_ORPHAN_PHOTOS ?? "0 4 * * *";
+/** Strip accidental surrounding quotes from Compose/env interpolation. */
+function cronExpr(raw: string | undefined, fallback: string) {
+  const v = (raw ?? fallback).trim().replace(/^["']|["']$/g, "");
+  return v || fallback;
+}
+const CRON_PLANNED = cronExpr(process.env.CRON_COMPLETE_PLANNED, "0 * * * *");
+const CRON_ORPHAN_PHOTOS = cronExpr(
+  process.env.CRON_CLEANUP_ORPHAN_PHOTOS,
+  "0 4 * * *",
+);
 const PLANNED_ENDPOINT = `${APP_URL}/api/cron/complete-planned-visits`;
 const ORPHAN_ENDPOINT = `${APP_URL}/api/cron/cleanup-orphan-photos`;
 
