@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.gitignore
+.DS_Store
+*.log
+npm-debug.log*
+.env
+.env.*
+!.env.example
+README.md
+Restaurant_Tracker_*.md
+coverage
+.vercel
+*.tsbuildinfo
+docker-compose.override.yml

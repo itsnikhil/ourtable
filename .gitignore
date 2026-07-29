@@ -1,5 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
 /.pnp
@@ -23,6 +21,7 @@
 # misc
 .DS_Store
 *.pem
+*.log
 
 # debug
 npm-debug.log*
@@ -30,8 +29,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — keep .env.example tracked
+.env
+.env.*
+!.env.example
+
+# google oauth client secrets downloaded from console
+client_secret*.json
+*.apps.googleusercontent.com.json
 
 # vercel
 .vercel
@@ -39,3 +44,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# docker
+docker-compose.override.yml
+
+# local database dumps (scripts/backup.sh)
+/backups/

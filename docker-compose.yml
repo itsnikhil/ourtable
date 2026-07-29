@@ -1,0 +1,63 @@
+services:
+  app:
+    build:
+      context: .
+      target: development
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://ourtable:ourtable@db:5432/ourtable
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - .:/app
+      - app_node_modules:/app/node_modules
+      - app_next:/app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ourtable
+      POSTGRES_PASSWORD: ourtable
+      POSTGRES_DB: ourtable
+    ports:
+      # Host 5433 avoids clashing with a local Postgres on 5432; containers still use db:5432.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ourtable -d ourtable"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: worker
+    env_file:
+      - .env
+    environment:
+      # Worker hits the app service over the compose network (LLD §9.4).
+      APP_URL: http://app:3000
+      # Hourly at :00 — override with CRON_COMPLETE_PLANNED if needed.
+      CRON_COMPLETE_PLANNED: "0 * * * *"
+      # Daily 04:00 UTC — R2 orphan photo GC (HLD §6.6).
+      CRON_CLEANUP_ORPHAN_PHOTOS: "0 4 * * *"
+    depends_on:
+      app:
+        condition: service_started
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  app_node_modules:
+  app_next:
