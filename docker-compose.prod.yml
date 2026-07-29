@@ -82,7 +82,7 @@ services:
       [
         "bash",
         "-lc",
-        "npm ci && npx drizzle-kit migrate",
+        "npm ci && ./node_modules/.bin/drizzle-kit migrate",
       ]
     depends_on:
       db:
