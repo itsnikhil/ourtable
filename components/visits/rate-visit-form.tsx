@@ -12,10 +12,11 @@ import {
   wouldReturnSchema,
 } from "@/lib/validations/rating";
 import { Button } from "@/components/ui/button";
+import { RatingStars } from "@/components/design/rating-stars";
 import { cn } from "@/lib/utils";
 
 const fieldClass =
-  "border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-lg border px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  "border-input bg-card ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-2xl border px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 const labelClass = "text-sm font-medium";
 
@@ -108,6 +109,8 @@ export function RateVisitForm({
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<RateFormValues>({
     resolver: zodResolver(rateFormSchema),
@@ -181,7 +184,7 @@ export function RateVisitForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {willSync ? (
-        <p className="border-border bg-muted/40 rounded-lg border p-3 text-sm">
+        <p className="bg-muted/40 rounded-2xl p-3 text-sm">
           Saved on this device — will sync when you&apos;re back online.
         </p>
       ) : null}
@@ -192,17 +195,17 @@ export function RateVisitForm({
       ) : null}
 
       <div className="space-y-1.5">
-        <label className={labelClass} htmlFor="overallRating">
+        <p className={labelClass}>
           Overall (0–10) <span className="text-destructive">*</span>
-        </label>
-        <input
-          id="overallRating"
-          type="number"
-          min={0}
-          max={10}
-          step={0.5}
-          className={fieldClass}
-          {...register("overallRating")}
+        </p>
+        <RatingStars
+          value={Number(watch("overallRating") || 0)}
+          scale="overall"
+          size="lg"
+          interactive
+          onChange={(next) =>
+            setValue("overallRating", next, { shouldValidate: true })
+          }
         />
         {errors.overallRating ? (
           <p className="text-destructive text-xs">
@@ -211,44 +214,57 @@ export function RateVisitForm({
         ) : null}
       </div>
 
-      <fieldset className="space-y-2">
+      <fieldset className="space-y-3">
         <legend className={labelClass}>Categories (1–5, optional)</legend>
-        <div className="grid grid-cols-2 gap-3">
-          {CATEGORIES.map(([name, label]) => (
-            <div key={name} className="space-y-1">
-              <label className="text-muted-foreground text-xs" htmlFor={name}>
-                {label}
-              </label>
-              <input
-                id={name}
-                type="number"
-                min={1}
-                max={5}
-                step={1}
-                className={fieldClass}
-                {...register(name)}
-              />
-            </div>
-          ))}
+        <div className="space-y-3">
+          {CATEGORIES.map(([name, label]) => {
+            const raw = watch(name);
+            const n = typeof raw === "number" ? raw : Number(raw);
+            return (
+              <div
+                key={name}
+                className="flex items-center justify-between gap-3"
+              >
+                <p className="text-sm">{label}</p>
+                <RatingStars
+                  value={Number.isFinite(n) ? n : 0}
+                  interactive
+                  size="sm"
+                  onChange={(next) =>
+                    setValue(name, next, { shouldValidate: true })
+                  }
+                />
+              </div>
+            );
+          })}
         </div>
       </fieldset>
 
-      <div className="space-y-1.5">
-        <label className={labelClass} htmlFor="wouldReturn">
-          Would you return?
-        </label>
-        <select
-          id="wouldReturn"
-          className={fieldClass}
-          {...register("wouldReturn")}
-        >
-          <option value="">—</option>
-          {wouldReturnSchema.options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+      <div className="space-y-2">
+        <p className={labelClass}>Would you return?</p>
+        <div className="flex flex-wrap gap-2">
+          {wouldReturnSchema.options.map((o) => {
+            const selected = watch("wouldReturn") === o;
+            return (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setValue("wouldReturn", o)}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium",
+                  o === "YES" && selected && "bg-success text-success-foreground",
+                  o === "MAYBE" &&
+                    selected &&
+                    "bg-surface-inverse text-surface-inverse-foreground",
+                  o === "NO" && selected && "bg-destructive text-card",
+                  !selected && "bg-muted text-muted-foreground",
+                )}
+              >
+                {o === "YES" ? "Yes" : o === "MAYBE" ? "Maybe" : "No"}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {dishes.length > 0 ? (

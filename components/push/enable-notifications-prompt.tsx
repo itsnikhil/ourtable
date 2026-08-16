@@ -65,7 +65,7 @@ export function EnableNotificationsPrompt() {
   if (!visible) return null;
 
   return (
-    <div className="border-border bg-muted/40 space-y-3 rounded-xl border p-4">
+    <div className="border-border bg-card space-y-3 rounded-2xl p-4 shadow-card">
       <div className="space-y-1">
         <p className="text-sm font-medium">Enable notifications?</p>
         <p className="text-muted-foreground text-xs leading-relaxed">

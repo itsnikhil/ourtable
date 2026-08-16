@@ -13,9 +13,11 @@ export default async function RestaurantOverviewPage({
   if (!restaurant) notFound();
 
   return (
-    <div className="space-y-4">
-      <RestaurantTabs restaurantId={restaurant.id} active="Overview" />
-      <RestaurantOverview restaurant={restaurant} />
-    </div>
+    <RestaurantOverview
+      restaurant={restaurant}
+      tabs={
+        <RestaurantTabs restaurantId={restaurant.id} active="Overview" />
+      }
+    />
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { VisitListItem } from "@/lib/queries/visit-queries";
+import { Card } from "@/components/design/card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +79,7 @@ export function CalendarViews({
         >
           ←
         </Link>
-        <h2 className="text-sm font-semibold">{monthLabel}</h2>
+        <h2 className="font-heading text-xl">{monthLabel}</h2>
         <Link
           href={`/calendar?year=${next.getFullYear()}&month=${next.getMonth() + 1}`}
           className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
@@ -146,8 +147,9 @@ export function CalendarViews({
                 type="button"
                 aria-label={`${dayLabel}. ${visitSummary}`}
                 className={cn(
-                  "border-border min-h-14 rounded-md border p-1 text-left",
-                  hasAny && "bg-muted/40",
+                  "bg-card min-h-14 rounded-2xl p-1.5 text-left shadow-card",
+                  hasAny && "ring-primary/30 ring-1",
+                  planned && "bg-success/10",
                 )}
                 onClick={() => {
                   if (planned) {
@@ -175,7 +177,7 @@ export function CalendarViews({
                     className={cn(
                       "truncate text-[10px] leading-tight",
                       v.status === "PLANNED"
-                        ? "text-foreground"
+                        ? "text-success"
                         : "text-muted-foreground",
                     )}
                   >
@@ -193,7 +195,7 @@ export function CalendarViews({
           })}
         </div>
       ) : (
-        <ul className="divide-border divide-y text-sm">
+        <ul className="space-y-3 text-sm">
           {visits.length === 0 ? (
             <li className="text-muted-foreground py-4">
               No visits in this month.
@@ -201,22 +203,26 @@ export function CalendarViews({
           ) : (
             visits.map((v) => (
               <li key={v.id}>
-                <Link
-                  href={`/visits/${v.id}`}
-                  className="hover:bg-muted/50 flex items-center justify-between gap-3 py-3"
-                >
-                  <div>
-                    <p className="font-medium">{v.restaurantName}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {new Date(v.visitDate).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                      {v.meal ? ` · ${v.meal}` : ""}
-                      {` · ${v.status}`}
-                    </p>
-                  </div>
+                <Link href={`/visits/${v.id}`}>
+                  <Card className="flex items-center justify-between gap-3 py-3">
+                    <div>
+                      <p className="font-medium">{v.restaurantName}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {new Date(v.visitDate).toLocaleDateString(undefined, {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                        {v.meal ? ` · ${v.meal}` : ""}
+                        {` · ${v.status}`}
+                      </p>
+                    </div>
+                    {v.coupleAverageRating != null ? (
+                      <span className="text-success text-sm font-semibold tabular-nums">
+                        {v.coupleAverageRating.toFixed(1)}
+                      </span>
+                    ) : null}
+                  </Card>
                 </Link>
               </li>
             ))

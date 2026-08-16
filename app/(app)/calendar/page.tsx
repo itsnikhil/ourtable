@@ -27,7 +27,7 @@ export default async function CalendarPage({
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
+          <h1 className="font-heading text-3xl">Calendar</h1>
           <p className="text-muted-foreground text-sm">
             Plans and logged visits — month grid or timeline.
           </p>

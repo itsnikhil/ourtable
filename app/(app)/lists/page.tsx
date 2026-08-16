@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/layout/coming-soon";
+import { ListsScreen } from "@/components/lists/lists-screen";
 
 export default function Page() {
-  return <ComingSoon title="Lists" description="My lists and smart lists." />;
+  return <ListsScreen />;
 }

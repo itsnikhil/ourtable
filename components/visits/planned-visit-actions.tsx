@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const fieldClass =
-  "border-input bg-background focus-visible:ring-ring flex h-9 w-full rounded-lg border px-3 py-1 text-sm outline-none focus-visible:ring-2";
+  "bg-muted text-foreground placeholder:text-muted-foreground focus-visible:ring-success/40 flex h-10 w-full rounded-lg px-3 py-1 text-sm outline-none focus-visible:ring-2";
 
 function toDateInput(iso: string) {
   const d = new Date(iso);
@@ -83,15 +83,13 @@ export function PlannedVisitActions({
   }
 
   return (
-    <section className="space-y-3 border-t pt-4">
-      <h2 className="text-sm font-semibold tracking-tight uppercase">
-        Plan actions
-      </h2>
+    <section className="space-y-3">
+      <h2 className="text-base font-semibold">Plan</h2>
       {error ? (
         <p className="text-destructive text-sm">{error}</p>
       ) : null}
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <label className="text-muted-foreground text-xs" htmlFor="reschedule-date">
             Date
           </label>
@@ -103,7 +101,7 @@ export function PlannedVisitActions({
             onChange={(e) => setDate(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <label className="text-muted-foreground text-xs" htmlFor="reschedule-time">
             Time
           </label>
@@ -120,6 +118,7 @@ export function PlannedVisitActions({
         <Button
           type="button"
           size="sm"
+          className="bg-success text-success-foreground hover:bg-success/90"
           disabled={busy}
           onClick={() => void onReschedule()}
         >

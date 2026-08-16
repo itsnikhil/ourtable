@@ -19,7 +19,7 @@ export default async function RestaurantPhotosPage({
     <div className="space-y-4">
       <RestaurantTabs restaurantId={restaurantId} active="Photos" />
       <div className="space-y-3">
-        <h1 className="text-lg font-semibold tracking-tight">Photos</h1>
+        <h1 className="font-heading text-2xl">Photos</h1>
         <p className="text-muted-foreground text-sm">
           Cover and restaurant shots. These also feed the Overview hero.
         </p>

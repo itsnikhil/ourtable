@@ -18,7 +18,7 @@ export default async function RateVisitPage({
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Your review</h1>
+          <h1 className="font-heading text-3xl">Your review</h1>
           <p className="text-muted-foreground text-sm">
             {visit.restaurantName} · rate this visit independently from your
             partner.

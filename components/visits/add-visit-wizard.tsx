@@ -20,6 +20,7 @@ import {
   mealSchema,
   paymentSplitSchema,
 } from "@/lib/validations/visit";
+import { Calendar, ChevronDown, ChevronLeft, Clock, Minus, Plus } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useDraftPersist } from "@/lib/hooks/use-draft-persist";
@@ -27,9 +28,28 @@ import { withOfflineAwareness } from "@/lib/offline";
 import { RateVisitForm } from "@/components/visits/rate-visit-form";
 
 const fieldClass =
-  "border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-lg border px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  "bg-muted text-foreground placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border-0 px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50";
 
-const labelClass = "text-sm font-medium";
+const labelClass = "text-sm font-semibold";
+
+const OCCASIONS = [
+  "Anniversary",
+  "Birthday",
+  "Date night",
+  "Casual",
+  "Celebration",
+  "Business",
+  "Holiday",
+] as const;
+
+function chipClass(selected: boolean) {
+  return cn(
+    "rounded-full px-4 py-2.5 text-sm font-medium",
+    selected
+      ? "bg-success text-success-foreground"
+      : "bg-muted text-foreground",
+  );
+}
 
 function emptyToUndef(v: unknown) {
   if (typeof v !== "string") return v;
@@ -59,6 +79,12 @@ const visitStepSchema = z.object({
 });
 
 type VisitStepValues = z.input<typeof visitStepSchema>;
+
+function parsePartySize(value: VisitStepValues["partySize"]) {
+  if (value === "" || value == null) return undefined;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 const billStepSchema = z.object({
   subtotal: z.preprocess(emptyToUndef, z.string().optional()),
@@ -115,10 +141,12 @@ export function AddVisitWizard({
   preselectedRestaurant,
   initialMode = "log",
   initialDate,
+  backHref = "/calendar",
 }: {
   preselectedRestaurant: RestaurantOption | null;
   initialMode?: "log" | "plan";
   initialDate?: string;
+  backHref?: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"log" | "plan">(initialMode);
@@ -172,6 +200,16 @@ export function AddVisitWizard({
 
   const visitValues = visitForm.watch();
   const billValues = billForm.watch();
+  const occasionCurrent =
+    typeof visitValues.occasion === "string" ? visitValues.occasion.trim() : "";
+  const occasionOptions = (OCCASIONS as readonly string[]).includes(
+    occasionCurrent,
+  )
+    ? [...OCCASIONS]
+    : occasionCurrent
+      ? [...OCCASIONS, occasionCurrent]
+      : [...OCCASIONS];
+  const partySize = parsePartySize(visitValues.partySize) ?? 1;
 
   const draftState: WizardDraft = useMemo(
     () => ({
@@ -452,8 +490,32 @@ export function AddVisitWizard({
 
   return (
     <div className="space-y-5">
+      <header className="relative flex items-center justify-between">
+        <Link
+          href={backHref}
+          aria-label="Back"
+          className="text-foreground -ml-2 flex size-10 items-center justify-center"
+        >
+          <ChevronLeft className="size-6" />
+        </Link>
+        <h1 className="pointer-events-none absolute inset-x-10 text-center text-lg font-semibold">
+          New Visit
+        </h1>
+        {step === 1 ? (
+          <button
+            type="submit"
+            form="new-visit-step-1"
+            className="text-success px-2 text-sm font-bold"
+          >
+            Save
+          </button>
+        ) : (
+          <span className="w-10" aria-hidden />
+        )}
+      </header>
+
       {restoreCandidate ? (
-        <div className="border-border bg-muted/40 space-y-3 rounded-xl border p-4">
+        <div className="bg-card space-y-3 rounded-2xl p-4 shadow-card">
           <div className="space-y-1">
             <p className="text-sm font-medium">Resume unfinished visit?</p>
             <p className="text-muted-foreground text-xs leading-relaxed">
@@ -485,7 +547,7 @@ export function AddVisitWizard({
       ) : null}
 
       {pendingSync ? (
-        <div className="border-border bg-muted/40 space-y-2 rounded-xl border p-4">
+        <div className="bg-card space-y-2 rounded-2xl p-4 shadow-card">
           <p className="text-sm font-medium">Will sync when back online</p>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Your draft is saved on this device. We&apos;ll retry automatically
@@ -505,7 +567,7 @@ export function AddVisitWizard({
       ) : null}
 
       {step === 1 ? (
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {(
             [
               ["log", "Log a visit"],
@@ -516,12 +578,7 @@ export function AddVisitWizard({
               key={id}
               type="button"
               onClick={() => setMode(id)}
-              className={cn(
-                buttonVariants({
-                  variant: mode === id ? "default" : "outline",
-                  size: "sm",
-                }),
-              )}
+              className={chipClass(mode === id)}
             >
               {label}
             </button>
@@ -542,7 +599,7 @@ export function AddVisitWizard({
             <li
               key={n}
               className={cn(
-                "rounded-md px-2 py-1",
+                "rounded-full px-2 py-1",
                 step === n && "bg-muted text-foreground font-medium",
               )}
             >
@@ -564,10 +621,14 @@ export function AddVisitWizard({
       ) : null}
 
       {step === 1 ? (
-        <form onSubmit={onVisitSubmit} className="space-y-4">
+        <form
+          id="new-visit-step-1"
+          onSubmit={onVisitSubmit}
+          className="space-y-5"
+        >
           <div className="space-y-1.5">
             <label className={labelClass} htmlFor="restaurant-search">
-              Restaurant <span className="text-destructive">*</span>
+              Restaurant
             </label>
             <input
               id="restaurant-search"
@@ -582,21 +643,16 @@ export function AddVisitWizard({
               autoComplete="off"
             />
             <input type="hidden" {...visitForm.register("restaurantId")} />
-            {selectedRestaurant ? (
-              <p className="text-muted-foreground text-xs">
-                Selected: {selectedRestaurant.name}
-              </p>
-            ) : null}
             {searchPending ? (
               <p className="text-muted-foreground text-xs">Searching…</p>
             ) : null}
             {results.length > 0 ? (
-              <ul className="border-border divide-y rounded-lg border text-sm">
+              <ul className="bg-muted divide-border/60 divide-y overflow-hidden rounded-lg text-sm">
                 {results.map((r) => (
                   <li key={r.id}>
                     <button
                       type="button"
-                      className="hover:bg-muted w-full px-3 py-2 text-left"
+                      className="hover:bg-secondary w-full px-3 py-2.5 text-left"
                       onClick={() => {
                         setSelectedRestaurant(r);
                         setQuery(r.name);
@@ -618,72 +674,96 @@ export function AddVisitWizard({
               href="/restaurants/new"
               className={cn(
                 buttonVariants({ variant: "link", size: "sm" }),
-                "h-auto px-0",
+                "text-muted-foreground h-auto px-0",
               )}
             >
               Add a new restaurant
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="visitDate">
-                Date <span className="text-destructive">*</span>
-              </label>
+          <div className="space-y-1.5">
+            <label className={labelClass} htmlFor="visitDate">
+              Visit Date
+            </label>
+            <div className="relative">
               <input
                 id="visitDate"
                 type="date"
-                className={fieldClass}
+                className={cn(
+                  fieldClass,
+                  "pr-10 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:h-4 [&::-webkit-calendar-picker-indicator]:w-4 [&::-webkit-calendar-picker-indicator]:opacity-0",
+                )}
                 {...visitForm.register("visitDate")}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="visitTime">
-                Time
-              </label>
-              <input
-                id="visitTime"
-                type="time"
-                className={fieldClass}
-                {...visitForm.register("visitTime")}
+              <Calendar
+                aria-hidden
+                className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="meal">
-                Meal
-              </label>
-              <select
-                id="meal"
-                className={fieldClass}
-                {...visitForm.register("meal")}
-              >
-                <option value="">—</option>
-                {mealSchema.options.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+          <div className="space-y-1.5">
+            <label className={labelClass} htmlFor="visitTime">
+              Time
+            </label>
+            <div className="relative">
+              <input
+                id="visitTime"
+                type="time"
+                className={cn(
+                  fieldClass,
+                  "pr-10 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:h-4 [&::-webkit-calendar-picker-indicator]:w-4 [&::-webkit-calendar-picker-indicator]:opacity-0",
+                )}
+                {...visitForm.register("visitTime")}
+              />
+              <Clock
+                aria-hidden
+                className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
+              />
             </div>
-            <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="dineType">
-                Dine type
-              </label>
-              <select
-                id="dineType"
-                className={fieldClass}
-                {...visitForm.register("dineType")}
-              >
-                <option value="">—</option>
-                {dineTypeSchema.options.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+          </div>
+
+          <div className="space-y-2">
+            <p className={labelClass}>Meal</p>
+            <div className="grid grid-cols-3 gap-2">
+              {mealSchema.options.map((o) => {
+                const selected = visitValues.meal === o;
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => visitForm.setValue("meal", o)}
+                    className={chipClass(selected)}
+                  >
+                    {o.charAt(0) + o.slice(1).toLowerCase()}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className={labelClass}>Type</p>
+            <div className="grid grid-cols-3 gap-2">
+              {dineTypeSchema.options.map((o) => {
+                const selected = visitValues.dineType === o;
+                const label =
+                  o === "DINE_IN"
+                    ? "Dine-in"
+                    : o === "TAKEOUT"
+                      ? "Takeaway"
+                      : "Delivery";
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => visitForm.setValue("dineType", o)}
+                    className={chipClass(selected)}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -692,38 +772,79 @@ export function AddVisitWizard({
               <label className={labelClass} htmlFor="occasion">
                 Occasion
               </label>
-              <input
-                id="occasion"
-                className={fieldClass}
-                {...visitForm.register("occasion")}
-              />
+              <div className="relative">
+                <select
+                  id="occasion"
+                  className={cn(fieldClass, "appearance-none pr-9")}
+                  {...visitForm.register("occasion")}
+                >
+                  <option value="">Select</option>
+                  {occasionOptions.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  aria-hidden
+                  className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="partySize">
-                Party size
-              </label>
-              <input
-                id="partySize"
-                type="number"
-                min={1}
-                max={50}
-                className={fieldClass}
-                {...visitForm.register("partySize")}
-              />
+              <p className={labelClass} id="people-label">
+                People
+              </p>
+              <div
+                className="bg-muted flex h-11 items-stretch overflow-hidden rounded-lg"
+                role="group"
+                aria-labelledby="people-label"
+              >
+                <button
+                  type="button"
+                  aria-label="Decrease people"
+                  className="flex w-11 items-center justify-center disabled:opacity-40"
+                  disabled={partySize <= 1}
+                  onClick={() =>
+                    visitForm.setValue("partySize", Math.max(1, partySize - 1))
+                  }
+                >
+                  <Minus className="size-4" />
+                </button>
+                <span className="flex flex-1 items-center justify-center text-sm font-medium">
+                  {partySize}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Increase people"
+                  className="flex w-11 items-center justify-center disabled:opacity-40"
+                  disabled={partySize >= 50}
+                  onClick={() =>
+                    visitForm.setValue("partySize", Math.min(50, partySize + 1))
+                  }
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className={labelClass} htmlFor="seating">
-              Seating
-            </label>
-            <input
-              id="seating"
-              className={fieldClass}
-              placeholder="Patio, bar, …"
-              {...visitForm.register("seating")}
-            />
-          </div>
+          <details className="text-sm">
+            <summary className="text-muted-foreground cursor-pointer select-none">
+              More details
+            </summary>
+            <div className="mt-3 space-y-1.5">
+              <label className={labelClass} htmlFor="seating">
+                Seating
+              </label>
+              <input
+                id="seating"
+                className={fieldClass}
+                placeholder="Patio, bar, …"
+                {...visitForm.register("seating")}
+              />
+            </div>
+          </details>
 
           <Button
             type="submit"
@@ -734,7 +855,7 @@ export function AddVisitWizard({
               ? "Saving…"
               : mode === "plan"
                 ? "Save plan"
-                : "Continue to ordered items"}
+                : "Continue"}
           </Button>
         </form>
       ) : null}
@@ -748,7 +869,7 @@ export function AddVisitWizard({
           {items.map((item, index) => (
             <div
               key={item.key}
-              className="border-border space-y-2 rounded-lg border p-3"
+              className="bg-card space-y-2 rounded-2xl p-4 shadow-card"
             >
               <div className="space-y-1.5">
                 <label className={labelClass}>Dish name</label>
@@ -802,8 +923,15 @@ export function AddVisitWizard({
                         };
                         setItems(next);
                       }}
+                      className="accent-success size-4"
                     />
-                    Again?
+                    <span
+                      className={
+                        item.wouldOrderAgain ? "text-success font-medium" : ""
+                      }
+                    >
+                      Order again
+                    </span>
                   </label>
                 </div>
               </div>

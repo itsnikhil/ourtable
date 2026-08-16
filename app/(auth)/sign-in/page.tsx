@@ -12,7 +12,7 @@ export default async function SignInPage({
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">Our Table</h1>
+        <h1 className="font-heading text-4xl">Our Table</h1>
         <p className="text-muted-foreground text-sm">
           {bypass
             ? "Local auth bypass is enabled."

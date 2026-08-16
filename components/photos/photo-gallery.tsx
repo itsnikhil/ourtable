@@ -155,14 +155,14 @@ export function PhotoGallery({
                 fill
                 sizes="(max-width: 640px) 33vw, 160px"
                 loader={r2ImageLoader}
-                className="rounded-lg object-cover"
+                className="rounded-2xl object-cover"
                 unoptimized
               />
               {photo.uploadedByName ? (
                 <span
                   title={`Uploaded by ${photo.uploadedByName}`}
                   aria-label={`Uploaded by ${photo.uploadedByName}`}
-                  className="absolute bottom-1 left-1 inline-flex size-6 items-center justify-center rounded-full bg-black/65 text-[10px] font-medium text-white"
+                  className="absolute bottom-1 left-1 inline-flex size-6 items-center justify-center rounded-full bg-surface-inverse/80 text-[10px] font-medium text-surface-inverse-foreground"
                 >
                   {photo.uploadedByName.slice(0, 1).toUpperCase()}
                 </span>

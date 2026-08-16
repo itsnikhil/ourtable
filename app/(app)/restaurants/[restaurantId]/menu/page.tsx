@@ -9,7 +9,7 @@ export default async function Page({
   const { restaurantId } = await params;
   return (
     <div className="space-y-4">
-      <RestaurantTabs restaurantId={restaurantId} active="Menu" />
+      <RestaurantTabs restaurantId={restaurantId} active="Menu Highlights" />
       <ComingSoon
         title="Menu highlights"
         description="Dishes ordered at this restaurant."
