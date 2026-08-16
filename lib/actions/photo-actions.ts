@@ -8,6 +8,7 @@ import { requireAuthContext } from "@/lib/auth";
 import { fail, ok, type ActionResult } from "@/lib/errors";
 import { runAction } from "@/lib/action-utils";
 import { attachPhotoSchema } from "@/lib/validations/photo";
+import { isHouseholdPhotoUrl } from "@/lib/r2";
 
 async function assertVisitInHousehold(visitId: string, householdId: string) {
   const [row] = await db
@@ -69,6 +70,10 @@ export async function attachPhoto(
   return runAction(async () => {
     const parsed = attachPhotoSchema.parse(input);
     const { userId, householdId } = await requireAuthContext();
+
+    if (!isHouseholdPhotoUrl(parsed.objectUrl, householdId)) {
+      return fail("VALIDATION_ERROR", "Invalid photo URL for this household.");
+    }
 
     if (parsed.visitId) {
       const visit = await assertVisitInHousehold(parsed.visitId, householdId);

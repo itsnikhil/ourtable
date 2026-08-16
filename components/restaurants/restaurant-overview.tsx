@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -18,7 +17,7 @@ import { RatingBadge } from "@/components/design/rating-badge";
 import { RatingStars } from "@/components/design/rating-stars";
 import { TagChip } from "@/components/design/tag-chip";
 import { buttonVariants } from "@/components/ui/button";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { R2Image } from "@/components/photos/r2-image";
 import type { RestaurantDetail } from "@/lib/queries/restaurant-queries";
 import { cn } from "@/lib/utils";
 
@@ -158,15 +157,13 @@ export function RestaurantOverview({
     <div className="-mx-4 -mt-6">
       <div className="bg-surface-inverse relative min-h-[26rem] overflow-hidden">
         {restaurant.primaryPhotoUrl ? (
-          <Image
+          <R2Image
             src={restaurant.primaryPhotoUrl}
             alt=""
             fill
             sizes="(max-width: 768px) 100vw, 720px"
-            loader={r2ImageLoader}
             className="object-cover"
             priority
-            unoptimized
           />
         ) : null}
         <div className="absolute inset-0 bg-black/45" />

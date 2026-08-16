@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const requestUploadSchema = z.object({
   fileName: z.string().max(200),
-  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic"]),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
   fileSizeBytes: z.number().max(15 * 1024 * 1024), // 15MB cap
 });
 

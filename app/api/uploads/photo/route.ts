@@ -12,6 +12,7 @@ import {
 import { uploadPhotoAuth } from "@/lib/upload-photo-auth";
 
 const EXPIRES_IN_SECONDS = 300;
+const MAX_BYTES = 15 * 1024 * 1024; // 15MB cap
 
 function sanitizeFileName(fileName: string): string {
   const base = fileName.split(/[/\\]/).pop() ?? "photo";
@@ -34,32 +35,6 @@ export async function POST(request: Request) {
 
     const parsed = requestUploadSchema.safeParse(body);
     if (!parsed.success) {
-      // #region agent log
-      {
-        const rec =
-          body && typeof body === "object" ? (body as Record<string, unknown>) : null;
-        fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "373167",
-          },
-          body: JSON.stringify({
-            sessionId: "373167",
-            hypothesisId: "B",
-            location: "app/api/uploads/photo/route.ts:parse",
-            message: "upload schema rejected",
-            data: {
-              fieldErrors: parsed.error.flatten().fieldErrors,
-              bodyKeys: rec ? Object.keys(rec) : [],
-              contentType: rec?.contentType,
-              fileSizeBytes: rec?.fileSizeBytes,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-      }
-      // #endregion
       return Response.json(
         {
           error: "Invalid input.",
@@ -69,7 +44,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { fileName, contentType, fileSizeBytes } = parsed.data;
+    const { fileName, contentType } = parsed.data;
 
     const key = `households/${householdId}/${createId()}-${sanitizeFileName(fileName)}`;
     const client = createR2Client();
@@ -84,106 +59,77 @@ export async function POST(request: Request) {
     });
     const objectUrl = r2ObjectUrl(key);
 
-    // #region agent log
-    {
-      const signed = new URL(uploadUrl);
-      let objectHost = "invalid";
-      try {
-        objectHost = new URL(objectUrl).host;
-      } catch {
-        objectHost = "invalid";
-      }
-      const signedHeaders = signed.searchParams.get("X-Amz-SignedHeaders");
-      const hasChecksum = [...signed.searchParams.keys()].some((k) =>
-        k.toLowerCase().includes("checksum"),
-      );
-      const algo =
-        signed.searchParams.get("x-amz-sdk-checksum-algorithm") ??
-        signed.searchParams.get("X-Amz-Sdk-Checksum-Algorithm");
-      fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "373167",
-        },
-        body: JSON.stringify({
-            sessionId: "373167",
-            runId: "post-fix",
-            hypothesisId: "D",
-          location: "app/api/uploads/photo/route.ts:signed",
-          message: "presign ok",
-          data: {
-            contentType,
-            fileSizeBytes,
-            host: signed.host,
-            signedHeaders,
-            hasChecksum,
-            algo,
-            objectHost,
-            householdIdLen: householdId.length,
-            runId: "post-fix",
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
-
     return Response.json({
       uploadUrl,
       objectUrl,
-      key,
       expiresInSeconds: EXPIRES_IN_SECONDS,
     });
   } catch (error) {
     if (error instanceof AuthContextError) {
-      // #region agent log
-      fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "373167",
-        },
-        body: JSON.stringify({
-          sessionId: "373167",
-          hypothesisId: "A",
-          location: "app/api/uploads/photo/route.ts:auth",
-          message: "AuthContextError",
-          data: {},
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (error instanceof z.ZodError) {
       return Response.json({ error: "Invalid input." }, { status: 400 });
     }
-    // #region agent log
-    {
-      const name = error instanceof Error ? error.name : "unknown";
-      const errMessage =
-        error instanceof Error
-          ? error.message.slice(0, 200)
-          : String(error).slice(0, 200);
-      fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "373167",
-        },
-        body: JSON.stringify({
-          sessionId: "373167",
-          hypothesisId: "C",
-          location: "app/api/uploads/photo/route.ts:catch",
-          message: "upload route threw",
-          data: { name, errMessage },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
-    console.error("[api/uploads/photo]", error);
+    console.error("[api/uploads/photo:POST]", error);
     return Response.json({ error: "Something went wrong." }, { status: 500 });
+  }
+}
+
+/**
+ * Direct same-origin upload endpoint for browser clients where direct R2
+ * CORS preflight is blocked. Authenticates session, validates payload,
+ * securely generates a server-side key, and uploads bytes to R2.
+ */
+export async function PUT(request: Request) {
+  try {
+    const { householdId } = await uploadPhotoAuth.requireAuthContext();
+
+    const contentType =
+      request.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+    const typeValidation =
+      requestUploadSchema.shape.contentType.safeParse(contentType);
+    if (!typeValidation.success) {
+      return Response.json(
+        { error: "Invalid content type. Use JPEG, PNG, or WebP." },
+        { status: 400 },
+      );
+    }
+
+    const rawFileName = request.headers.get("x-file-name");
+    const fileName = rawFileName
+      ? decodeURIComponent(rawFileName)
+      : "photo.jpg";
+
+    const bytes = Buffer.from(await request.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_BYTES) {
+      return Response.json(
+        { error: "Photo must be 15MB or smaller." },
+        { status: 400 },
+      );
+    }
+
+    const key = `households/${householdId}/${createId()}-${sanitizeFileName(fileName)}`;
+    const client = createR2Client();
+    await client.send(
+      new PutObjectCommand({
+        Bucket: getR2BucketName(),
+        Key: key,
+        ContentType: contentType,
+        Body: bytes,
+      }),
+    );
+
+    const objectUrl = r2ObjectUrl(key);
+    return Response.json({ objectUrl });
+  } catch (error) {
+    if (error instanceof AuthContextError) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    console.error("[api/uploads/photo:PUT]", error);
+    return Response.json(
+      { error: "Upload to storage failed." },
+      { status: 500 },
+    );
   }
 }

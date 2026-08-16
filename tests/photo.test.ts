@@ -29,7 +29,10 @@ describe("photo domain (Step 5)", () => {
   let attachPhotoSchema: typeof import("@/lib/validations/photo").attachPhotoSchema;
   let cleanupOrphanPhotos: typeof import("@/lib/photo-cleanup").cleanupOrphanPhotos;
   let r2ObjectUrl: typeof import("@/lib/r2").r2ObjectUrl;
+  let photoThumbnailUrl: typeof import("@/lib/photo-url").photoThumbnailUrl;
   let uploadPost: typeof import("@/app/api/uploads/photo/route").POST;
+  let uploadPut: typeof import("@/app/api/uploads/photo/route").PUT;
+  let photoGet: typeof import("@/app/api/photos/[...key]/route").GET;
   let cleanupCronPost: typeof import("@/app/api/cron/cleanup-orphan-photos/route").POST;
   let AuthContextError: typeof import("@/lib/errors").AuthContextError;
   let db: typeof import("@/lib/db").db;
@@ -55,10 +58,14 @@ describe("photo domain (Step 5)", () => {
     ({ attachPhotoSchema } = await import("@/lib/validations/photo"));
     ({ cleanupOrphanPhotos } = await import("@/lib/photo-cleanup"));
     ({ r2ObjectUrl } = await import("@/lib/r2"));
-    ({ POST: uploadPost } = await import("@/app/api/uploads/photo/route"));
+    ({ POST: uploadPost, PUT: uploadPut } = await import(
+      "@/app/api/uploads/photo/route"
+    ));
     ({ POST: cleanupCronPost } = await import(
       "@/app/api/cron/cleanup-orphan-photos/route"
     ));
+    ({ photoThumbnailUrl } = await import("@/lib/photo-url"));
+    ({ GET: photoGet } = await import("@/app/api/photos/[...key]/route"));
     ({ AuthContextError } = await import("@/lib/errors"));
     ({ db } = await import("@/lib/db"));
     schema = await import("@/db/schema");
@@ -247,7 +254,7 @@ describe("photo domain (Step 5)", () => {
 
     it("maps refine failures to VALIDATION_ERROR in the action", async () => {
       const both = await attachPhoto({
-        objectUrl: "https://example.com/both.jpg",
+        objectUrl: fakeObjectUrl(`both-${stamp()}`),
         visitId: "v1",
         restaurantId: "r1",
       });
@@ -255,10 +262,41 @@ describe("photo domain (Step 5)", () => {
       if (!both.success) assert.equal(both.error.code, "VALIDATION_ERROR");
 
       const neither = await attachPhoto({
-        objectUrl: "https://example.com/neither.jpg",
+        objectUrl: fakeObjectUrl(`neither-${stamp()}`),
       });
       assert.equal(neither.success, false);
       if (!neither.success) assert.equal(neither.error.code, "VALIDATION_ERROR");
+    });
+
+    it("rejects an objectUrl belonging to another household", async () => {
+      const foreign = await seedForeignHousehold();
+      const restaurantId = await seedRestaurant("ScopePhoto");
+      const foreignObjectUrl = r2ObjectUrl(
+        `households/${foreign.householdId}/test-${stamp()}.jpg`,
+      );
+
+      const result = await attachPhoto({
+        objectUrl: foreignObjectUrl,
+        restaurantId,
+      });
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error.code, "VALIDATION_ERROR");
+        assert.match(result.error.message, /Invalid photo URL/);
+      }
+    });
+
+    it("rejects an untrusted external URL", async () => {
+      const restaurantId = await seedRestaurant("ExternalPhoto");
+      const result = await attachPhoto({
+        objectUrl: "https://evil.com/malicious.jpg",
+        restaurantId,
+      });
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(result.error.code, "VALIDATION_ERROR");
+        assert.match(result.error.message, /Invalid photo URL/);
+      }
     });
   });
 
@@ -402,6 +440,53 @@ describe("photo domain (Step 5)", () => {
     });
   });
 
+  describe("PUT /api/uploads/photo", () => {
+    it("returns 401 when unauthenticated", async () => {
+      const { uploadPhotoAuth } = await import("@/lib/upload-photo-auth");
+      const original = uploadPhotoAuth.requireAuthContext;
+      uploadPhotoAuth.requireAuthContext = async () => {
+        throw new AuthContextError();
+      };
+
+      try {
+        const res = await uploadPut(
+          new Request("http://localhost/api/uploads/photo", {
+            method: "PUT",
+            headers: { "Content-Type": "image/jpeg" },
+            body: new Uint8Array([1, 2, 3]),
+          }),
+        );
+        assert.equal(res.status, 401);
+        const body = await res.json();
+        assert.equal(body.error, "Unauthorized");
+      } finally {
+        uploadPhotoAuth.requireAuthContext = original;
+      }
+    });
+
+    it("returns 400 for wrong content type", async () => {
+      const res = await uploadPut(
+        new Request("http://localhost/api/uploads/photo", {
+          method: "PUT",
+          headers: { "Content-Type": "application/pdf" },
+          body: new Uint8Array([1, 2, 3]),
+        }),
+      );
+      assert.equal(res.status, 400);
+    });
+
+    it("returns 400 for empty body", async () => {
+      const res = await uploadPut(
+        new Request("http://localhost/api/uploads/photo", {
+          method: "PUT",
+          headers: { "Content-Type": "image/jpeg" },
+          body: new Uint8Array([]),
+        }),
+      );
+      assert.equal(res.status, 400);
+    });
+  });
+
   describe("cleanupOrphanPhotos", () => {
     it("deletes orphans older than 24h and leaves young objects alone", async () => {
       const now = new Date("2026-07-29T12:00:00.000Z");
@@ -448,6 +533,61 @@ describe("photo domain (Step 5)", () => {
         }),
       );
       assert.equal(res.status, 401);
+    });
+  });
+
+  describe("photoThumbnailUrl", () => {
+    it("transforms private S3 endpoints to same-origin /api/photos path", () => {
+      const s3Url =
+        "https://44fd33265517bbfeb230b2e757ef7b72.r2.cloudflarestorage.com/ourtable-photos/households/hh123/img1.jpg";
+      const thumb = photoThumbnailUrl(s3Url, 160);
+      assert.equal(thumb, "/api/photos/households/hh123/img1.jpg?width=160");
+    });
+
+    it("keeps custom public CDN domains as-is with width parameter", () => {
+      const cdnUrl = "https://media.ourtable.dev/households/hh123/img1.jpg";
+      const thumb = photoThumbnailUrl(cdnUrl, 160);
+      assert.equal(thumb, "https://media.ourtable.dev/households/hh123/img1.jpg?width=160");
+    });
+
+    it("safely handles empty or missing input", () => {
+      assert.equal(photoThumbnailUrl("", 100), "");
+    });
+  });
+
+  describe("GET /api/photos/[...key]", () => {
+    it("returns 401 when unauthenticated", async () => {
+      const { uploadPhotoAuth } = await import("@/lib/upload-photo-auth");
+      const original = uploadPhotoAuth.requireAuthContext;
+      uploadPhotoAuth.requireAuthContext = async () => {
+        throw new AuthContextError();
+      };
+
+      try {
+        const res = await photoGet(
+          new Request("http://localhost/api/photos/households/h1/x.jpg"),
+          { params: Promise.resolve({ key: ["households", "h1", "x.jpg"] }) },
+        );
+        assert.equal(res.status, 401);
+      } finally {
+        uploadPhotoAuth.requireAuthContext = original;
+      }
+    });
+
+    it("returns 403 when trying to access another household's photo", async () => {
+      const res = await photoGet(
+        new Request("http://localhost/api/photos/households/foreign-hh/x.jpg"),
+        { params: Promise.resolve({ key: ["households", "foreign-hh", "x.jpg"] }) },
+      );
+      assert.equal(res.status, 403);
+    });
+
+    it("returns 403 on path traversal attempt", async () => {
+      const res = await photoGet(
+        new Request("http://localhost/api/photos/households/../secret.env"),
+        { params: Promise.resolve({ key: ["households", "..", "secret.env"] }) },
+      );
+      assert.equal(res.status, 403);
     });
   });
 });

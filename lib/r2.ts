@@ -58,3 +58,68 @@ export function r2ObjectUrl(key: string): string {
   }
   return `${base}/${key}`;
 }
+
+/**
+ * Validates that an object URL belongs to the caller's household and matches
+ * the configured R2 public domain / storage endpoints.
+ */
+export function isHouseholdPhotoUrl(
+  objectUrl: string,
+  householdId: string,
+): boolean {
+  if (!objectUrl || typeof objectUrl !== "string") return false;
+  try {
+    const url = new URL(objectUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+
+    const expectedPrefix = `/households/${householdId}/`;
+    let bucket = "";
+    try {
+      bucket = getR2BucketName();
+    } catch {
+      /* ignore if env var missing during some offline contexts */
+    }
+    const bucketPrefix = bucket ? `/${bucket}/households/${householdId}/` : "";
+
+    const pathname = url.pathname;
+    const validPrefix =
+      pathname.startsWith(expectedPrefix) ||
+      (bucketPrefix ? pathname.startsWith(bucketPrefix) : false);
+    if (!validPrefix) return false;
+
+    // Check for path traversal or malicious characters
+    if (
+      pathname.includes("..") ||
+      pathname.includes("//") ||
+      pathname.includes("\\")
+    ) {
+      return false;
+    }
+
+    const allowedHostnames = new Set<string>();
+    try {
+      const publicBase = getR2PublicBaseUrl();
+      allowedHostnames.add(new URL(publicBase).hostname.toLowerCase());
+    } catch {}
+
+    const accountId = process.env.R2_ACCOUNT_ID?.trim();
+    if (accountId && !accountId.startsWith("cfat_")) {
+      allowedHostnames.add(
+        `${accountId.toLowerCase()}.r2.cloudflarestorage.com`,
+      );
+    }
+
+    const host = url.hostname.toLowerCase();
+    const isAllowedHost =
+      allowedHostnames.has(host) ||
+      host.endsWith(".r2.cloudflarestorage.com") ||
+      host.endsWith(".r2.dev") ||
+      host === "localhost" ||
+      host === "127.0.0.1";
+
+    return isAllowedHost;
+  } catch {
+    return false;
+  }
+}
+

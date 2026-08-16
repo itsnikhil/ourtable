@@ -1,19 +1,40 @@
 import type { ImageLoader } from "next/image";
 
 /**
- * Thumbnail convention for R2 object URLs (HLD §6.6 follow-up).
- * Appends `?width=` so a future Cloudflare Images / Worker transform can
- * honor it. R2 itself does not resize today — full object is still fetched.
+ * Transforms an object URL into a browser-fetchable URL.
+ * If the URL points to a private S3 endpoint (*.r2.cloudflarestorage.com),
+ * it routes through the authenticated /api/photos/[...key] endpoint.
  */
-export function photoThumbnailUrl(objectUrl: string, width: number): string {
+export function photoThumbnailUrl(objectUrl: string, width?: number): string {
+  if (!objectUrl || typeof objectUrl !== "string") return "";
+
+  let resolvedUrl = objectUrl;
+
   try {
-    const url = new URL(objectUrl);
-    url.searchParams.set("width", String(width));
-    return url.toString();
+    const parsed = new URL(objectUrl);
+    if (parsed.hostname.endsWith(".r2.cloudflarestorage.com")) {
+      const match = parsed.pathname.match(/\/(households\/.+)$/);
+      if (match?.[1]) {
+        const cleanPath = match[1].replace(/^\/+/, "").replace(/\/+/g, "/");
+        resolvedUrl = `/api/photos/${cleanPath}`;
+      }
+    }
   } catch {
-    const join = objectUrl.includes("?") ? "&" : "?";
-    return `${objectUrl}${join}width=${width}`;
+    if (objectUrl.includes(".r2.cloudflarestorage.com")) {
+      const match = objectUrl.match(/\/(households\/.+?)(\?|$)/);
+      if (match?.[1]) {
+        const cleanPath = match[1].replace(/^\/+/, "").replace(/\/+/g, "/");
+        resolvedUrl = `/api/photos/${cleanPath}`;
+      }
+    }
   }
+
+  if (width !== undefined && width > 0) {
+    const join = resolvedUrl.includes("?") ? "&" : "?";
+    return `${resolvedUrl}${join}width=${width}`;
+  }
+
+  return resolvedUrl;
 }
 
 export const r2ImageLoader: ImageLoader = ({ src, width }) =>

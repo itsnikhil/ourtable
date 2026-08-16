@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { attachPhoto, removePhoto } from "@/lib/actions/photo-actions";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { PhotoCarouselModal } from "@/components/photos/photo-carousel-modal";
+import { R2Image } from "@/components/photos/r2-image";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,7 @@ const ALLOWED_TYPES = new Set([
   "image/png",
   "image/webp",
   "image/heic",
+  "image/heif",
 ]);
 
 const EXT_TO_TYPE: Record<string, string> = {
@@ -21,6 +22,7 @@ const EXT_TO_TYPE: Record<string, string> = {
   png: "image/png",
   webp: "image/webp",
   heic: "image/heic",
+  heif: "image/heif",
 };
 
 export type GalleryPhoto = {
@@ -40,141 +42,70 @@ function resolveContentType(file: File): string | null {
   return ext ? (EXT_TO_TYPE[ext] ?? null) : null;
 }
 
-async function requestAndPut(file: File): Promise<string> {
-  const contentType = resolveContentType(file);
-  if (!contentType) {
-    throw new Error("Use JPEG, PNG, WebP, or HEIC.");
+/**
+ * Automatically converts HEIC/HEIF files to standard JPEG using heic2any
+ * on the client before upload so images render universally on all platforms.
+ */
+async function prepareFileForUpload(
+  file: File,
+  onStatusChange?: (msg: string) => void,
+): Promise<File> {
+  const isHeic =
+    file.type.toLowerCase().includes("heic") ||
+    file.type.toLowerCase().includes("heif") ||
+    file.name.toLowerCase().endsWith(".heic") ||
+    file.name.toLowerCase().endsWith(".heif");
+
+  if (!isHeic) return file;
+
+  try {
+    onStatusChange?.("Converting HEIC…");
+    const heic2anyModule = await import("heic2any");
+    const heic2any = heic2anyModule.default ?? heic2anyModule;
+    const conversionResult = await heic2any({
+      blob: file,
+      toType: "image/jpeg",
+      quality: 0.92,
+    });
+
+    const blob = Array.isArray(conversionResult)
+      ? conversionResult[0]
+      : conversionResult;
+
+    if (blob) {
+      const newName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+      return new File([blob], newName, { type: "image/jpeg" });
+    }
+  } catch (err) {
+    console.error("[heic2any conversion error]", err);
   }
+
+  return file;
+}
+
+async function requestAndPut(file: File): Promise<string> {
+  const contentType = resolveContentType(file) ?? "image/jpeg";
   if (file.size > 15 * 1024 * 1024) {
     throw new Error("Photo must be 15MB or smaller.");
   }
 
-  const signed = await fetch("/api/uploads/photo", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      fileName: file.name || "photo.jpg",
-      contentType,
-      fileSizeBytes: file.size,
-    }),
+  const res = await fetch("/api/uploads/photo", {
+    method: "PUT",
+    headers: {
+      "Content-Type": contentType,
+      "x-file-name": encodeURIComponent(file.name || "photo.jpg"),
+    },
+    body: file,
   });
 
-  if (!signed.ok) {
-    const body = await signed.json().catch(() => ({}));
-    // #region agent log
-    {
-      const errVal = (body as { error?: unknown }).error;
-      fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "373167",
-        },
-        body: JSON.stringify({
-          sessionId: "373167",
-          hypothesisId: "A",
-          location: "components/photos/photo-gallery.tsx:signed-fail",
-          message: "presign request failed",
-          data: {
-            status: signed.status,
-            error: typeof errVal === "string" ? errVal : null,
-            contentType,
-            fileType: file.type,
-            fileSize: file.size,
-            ext: file.name.split(".").pop()?.toLowerCase() ?? null,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
     throw new Error(
-      typeof body.error === "string" ? body.error : "Could not get upload URL.",
+      typeof body.error === "string" ? body.error : "Upload to storage failed.",
     );
   }
 
-  const { objectUrl, key } = (await signed.json()) as {
-    uploadUrl: string;
-    objectUrl: string;
-    key: string;
-  };
-
-  // #region agent log
-  fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "373167",
-    },
-    body: JSON.stringify({
-      sessionId: "373167",
-      runId: "post-fix",
-      hypothesisId: "E",
-      location: "components/photos/photo-gallery.tsx:before-put",
-      message: "presign ok, putting same-origin",
-      data: {
-        contentType,
-        fileType: file.type,
-        fileSize: file.size,
-        hasKey: Boolean(key),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
-  const put = await fetch("/api/uploads/photo/object", {
-    method: "PUT",
-    headers: { "Content-Type": contentType, "x-object-key": key },
-    body: file,
-  });
-  if (!put.ok) {
-    const putText = await put.text().catch(() => "");
-    // #region agent log
-    fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "373167",
-      },
-      body: JSON.stringify({
-        sessionId: "373167",
-        runId: "post-fix",
-        hypothesisId: "E",
-        location: "components/photos/photo-gallery.tsx:put-fail",
-        message: "same-origin PUT failed",
-        data: {
-          status: put.status,
-          contentType,
-          fileSize: file.size,
-          putSnippet: putText.slice(0, 300),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    throw new Error("Upload to storage failed.");
-  }
-
-  // #region agent log
-  fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "373167",
-    },
-    body: JSON.stringify({
-      sessionId: "373167",
-      runId: "post-fix",
-      hypothesisId: "E",
-      location: "components/photos/photo-gallery.tsx:put-ok",
-      message: "same-origin PUT ok",
-      data: { status: put.status, contentType, fileSize: file.size },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
+  const { objectUrl } = (await res.json()) as { objectUrl: string };
   return objectUrl;
 }
 
@@ -190,6 +121,10 @@ export function PhotoGallery({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const [statusText, setStatusText] = useState("Uploading…");
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(
+    null,
+  );
 
   const busy = pending || uploading;
 
@@ -198,46 +133,16 @@ export function PhotoGallery({
     const file = files[0];
     setError(null);
     setUploading(true);
+    setStatusText("Uploading…");
     try {
-      const objectUrl = await requestAndPut(file);
+      const processedFile = await prepareFileForUpload(file, setStatusText);
+      setStatusText("Saving to cloud…");
+      const objectUrl = await requestAndPut(processedFile);
       const result = await attachPhoto({
         objectUrl,
         ...target,
       });
       if (!result.success) {
-        // #region agent log
-        {
-          let objectHost = "invalid";
-          try {
-            objectHost = new URL(objectUrl).host;
-          } catch {
-            objectHost = "invalid";
-          }
-          const hasVisit = "visitId" in target;
-          const hasRestaurant = "restaurantId" in target;
-          fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "373167",
-            },
-            body: JSON.stringify({
-              sessionId: "373167",
-              hypothesisId: "F",
-              location: "components/photos/photo-gallery.tsx:attach-fail",
-              message: "attachPhoto failed",
-              data: {
-                code: result.error.code,
-                errMessage: result.error.message,
-                objectHost,
-                hasVisit,
-                hasRestaurant,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-        }
-        // #endregion
         setError(result.error.message);
         return;
       }
@@ -271,34 +176,44 @@ export function PhotoGallery({
         <p className="text-muted-foreground text-sm">No photos yet.</p>
       ) : (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {photos.map((photo) => (
+          {photos.map((photo, index) => (
             <li key={photo.id} className="group relative aspect-square">
-              <Image
-                src={photo.url}
-                alt={
-                  photo.uploadedByName
-                    ? `Photo uploaded by ${photo.uploadedByName}`
-                    : ""
-                }
-                fill
-                sizes="(max-width: 640px) 33vw, 160px"
-                loader={r2ImageLoader}
-                className="rounded-2xl object-cover"
-                unoptimized
-              />
+              <button
+                type="button"
+                onClick={() => setSelectedPhotoIndex(index)}
+                aria-label={`View photo ${index + 1} in full`}
+                className="relative block size-full cursor-zoom-in overflow-hidden rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <R2Image
+                  src={photo.url}
+                  alt={
+                    photo.uploadedByName
+                      ? `Photo uploaded by ${photo.uploadedByName}`
+                      : ""
+                  }
+                  fill
+                  sizes="(max-width: 640px) 33vw, 160px"
+                  className="rounded-2xl object-cover transition-transform duration-200 group-hover:scale-105"
+                />
+              </button>
+
               {photo.uploadedByName ? (
                 <span
                   title={`Uploaded by ${photo.uploadedByName}`}
                   aria-label={`Uploaded by ${photo.uploadedByName}`}
-                  className="absolute bottom-1 left-1 inline-flex size-6 items-center justify-center rounded-full bg-surface-inverse/80 text-[10px] font-medium text-surface-inverse-foreground"
+                  className="pointer-events-none absolute bottom-1 left-1 inline-flex size-6 items-center justify-center rounded-full bg-surface-inverse/80 text-[10px] font-medium text-surface-inverse-foreground"
                 >
                   {photo.uploadedByName.slice(0, 1).toUpperCase()}
                 </span>
               ) : null}
+
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => onRemove(photo.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(photo.id);
+                }}
                 className={cn(
                   "absolute top-1 right-1 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100",
                   "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
@@ -316,7 +231,7 @@ export function PhotoGallery({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
           capture="environment"
           className="sr-only"
           disabled={busy}
@@ -328,7 +243,7 @@ export function PhotoGallery({
           onClick={() => inputRef.current?.click()}
           className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
         >
-          {uploading ? "Uploading…" : "Add photo"}
+          {uploading ? statusText : "Add photo"}
         </button>
         {busy && !uploading ? (
           <span className="text-muted-foreground text-xs">Saving…</span>
@@ -339,6 +254,14 @@ export function PhotoGallery({
         <p className="text-destructive text-sm" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {selectedPhotoIndex !== null ? (
+        <PhotoCarouselModal
+          photos={photos}
+          initialIndex={selectedPhotoIndex}
+          onClose={() => setSelectedPhotoIndex(null)}
+        />
       ) : null}
     </div>
   );
