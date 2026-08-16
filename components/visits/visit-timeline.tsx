@@ -1,8 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Card } from "@/components/design/card";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { R2Image } from "@/components/photos/r2-image";
 import type { VisitListItem } from "@/lib/queries/visit-queries";
 
 function formatVisitDate(iso: string) {
@@ -113,12 +112,11 @@ function VisitTimelineItem({ visit }: { visit: VisitListItem }) {
           <ul className="mt-3 flex gap-2 overflow-x-auto">
             {thumbs.map((src) => (
               <li key={src} className="size-14 shrink-0 overflow-hidden rounded-lg">
-                <Image
+                <R2Image
                   src={src}
                   alt=""
                   width={56}
                   height={56}
-                  loader={r2ImageLoader}
                   className="size-full object-cover"
                 />
               </li>

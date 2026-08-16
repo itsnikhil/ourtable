@@ -61,24 +61,119 @@ async function requestAndPut(file: File): Promise<string> {
 
   if (!signed.ok) {
     const body = await signed.json().catch(() => ({}));
+    // #region agent log
+    {
+      const errVal = (body as { error?: unknown }).error;
+      fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "373167",
+        },
+        body: JSON.stringify({
+          sessionId: "373167",
+          hypothesisId: "A",
+          location: "components/photos/photo-gallery.tsx:signed-fail",
+          message: "presign request failed",
+          data: {
+            status: signed.status,
+            error: typeof errVal === "string" ? errVal : null,
+            contentType,
+            fileType: file.type,
+            fileSize: file.size,
+            ext: file.name.split(".").pop()?.toLowerCase() ?? null,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
     throw new Error(
       typeof body.error === "string" ? body.error : "Could not get upload URL.",
     );
   }
 
-  const { uploadUrl, objectUrl } = (await signed.json()) as {
+  const { objectUrl, key } = (await signed.json()) as {
     uploadUrl: string;
     objectUrl: string;
+    key: string;
   };
 
-  const put = await fetch(uploadUrl, {
+  // #region agent log
+  fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "373167",
+    },
+    body: JSON.stringify({
+      sessionId: "373167",
+      runId: "post-fix",
+      hypothesisId: "E",
+      location: "components/photos/photo-gallery.tsx:before-put",
+      message: "presign ok, putting same-origin",
+      data: {
+        contentType,
+        fileType: file.type,
+        fileSize: file.size,
+        hasKey: Boolean(key),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
+  const put = await fetch("/api/uploads/photo/object", {
     method: "PUT",
-    headers: { "Content-Type": contentType },
+    headers: { "Content-Type": contentType, "x-object-key": key },
     body: file,
   });
   if (!put.ok) {
+    const putText = await put.text().catch(() => "");
+    // #region agent log
+    fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "373167",
+      },
+      body: JSON.stringify({
+        sessionId: "373167",
+        runId: "post-fix",
+        hypothesisId: "E",
+        location: "components/photos/photo-gallery.tsx:put-fail",
+        message: "same-origin PUT failed",
+        data: {
+          status: put.status,
+          contentType,
+          fileSize: file.size,
+          putSnippet: putText.slice(0, 300),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     throw new Error("Upload to storage failed.");
   }
+
+  // #region agent log
+  fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "373167",
+    },
+    body: JSON.stringify({
+      sessionId: "373167",
+      runId: "post-fix",
+      hypothesisId: "E",
+      location: "components/photos/photo-gallery.tsx:put-ok",
+      message: "same-origin PUT ok",
+      data: { status: put.status, contentType, fileSize: file.size },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   return objectUrl;
 }
@@ -110,6 +205,39 @@ export function PhotoGallery({
         ...target,
       });
       if (!result.success) {
+        // #region agent log
+        {
+          let objectHost = "invalid";
+          try {
+            objectHost = new URL(objectUrl).host;
+          } catch {
+            objectHost = "invalid";
+          }
+          const hasVisit = "visitId" in target;
+          const hasRestaurant = "restaurantId" in target;
+          fetch("http://127.0.0.1:7921/ingest/224b820e-5167-4961-bbc7-16ea1508300b", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "373167",
+            },
+            body: JSON.stringify({
+              sessionId: "373167",
+              hypothesisId: "F",
+              location: "components/photos/photo-gallery.tsx:attach-fail",
+              message: "attachPhoto failed",
+              data: {
+                code: result.error.code,
+                errMessage: result.error.message,
+                objectHost,
+                hasVisit,
+                hasRestaurant,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+        // #endregion
         setError(result.error.message);
         return;
       }

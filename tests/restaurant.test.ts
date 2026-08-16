@@ -16,6 +16,7 @@ describe("restaurant domain (Step 4)", () => {
   let createRestaurant: typeof import("@/lib/actions/restaurant-actions").createRestaurant;
   let deleteRestaurant: typeof import("@/lib/actions/restaurant-actions").deleteRestaurant;
   let setRestaurantOpinion: typeof import("@/lib/actions/restaurant-actions").setRestaurantOpinion;
+  let updateRestaurant: typeof import("@/lib/actions/restaurant-actions").updateRestaurant;
   let listRestaurants: typeof import("@/lib/queries/restaurant-queries").listRestaurants;
   let getRestaurantDetail: typeof import("@/lib/queries/restaurant-queries").getRestaurantDetail;
   let db: typeof import("@/lib/db").db;
@@ -40,6 +41,7 @@ describe("restaurant domain (Step 4)", () => {
       createRestaurant,
       deleteRestaurant,
       setRestaurantOpinion,
+      updateRestaurant,
     } = await import("@/lib/actions/restaurant-actions"));
     ({ listRestaurants, getRestaurantDetail } = await import(
       "@/lib/queries/restaurant-queries"
@@ -111,6 +113,48 @@ describe("restaurant domain (Step 4)", () => {
       if (second.success) return;
       assert.equal(second.error.code, "CONFLICT");
       assert.match(second.error.message, new RegExp(first.data.id));
+    });
+  });
+
+  describe("updateRestaurant", () => {
+    it("updates name, clears website, and replaces FOOD_TYPE tags", async () => {
+      const s = stamp();
+      const created = await createRestaurant({
+        name: `Edit Me ${s}`,
+        address: `${s} Edit St`,
+        website: "https://old.example.com",
+        newTagNames: [
+          { name: `Italian-${s}`, category: "FOOD_TYPE" },
+          { name: `Date night-${s}`, category: "VIBE" },
+        ],
+        forceCreate: true,
+      });
+      assert.equal(created.success, true, JSON.stringify(created));
+      if (!created.success) return;
+      restaurantIds.push(created.data.id);
+
+      const updated = await updateRestaurant({
+        id: created.data.id,
+        name: `Edited ${s}`,
+        website: null,
+        newTagNames: [{ name: `Mexican-${s}`, category: "FOOD_TYPE" }],
+      });
+      assert.equal(updated.success, true, JSON.stringify(updated));
+
+      const detail = await getRestaurantDetail(created.data.id);
+      assert.ok(detail);
+      assert.equal(detail?.name, `Edited ${s}`);
+      assert.equal(detail?.website, null);
+      const foodTypes = detail?.tags.filter((t) => t.category === "FOOD_TYPE") ?? [];
+      const vibes = detail?.tags.filter((t) => t.category === "VIBE") ?? [];
+      assert.deepEqual(
+        foodTypes.map((t) => t.name).sort(),
+        [`Mexican-${s}`],
+      );
+      assert.deepEqual(
+        vibes.map((t) => t.name).sort(),
+        [`Date night-${s}`],
+      );
     });
   });
 

@@ -41,6 +41,10 @@ export function createR2Client(): S3Client {
       accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
       secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
     },
+    // Presigned browser PUTs cannot compute CRC32; default WHEN_SUPPORTED
+    // adds x-amz-checksum-crc32=AAAAAA== and breaks the upload.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 }
 

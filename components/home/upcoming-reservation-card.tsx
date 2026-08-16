@@ -1,8 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { Card } from "@/components/design/card";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { R2Image } from "@/components/photos/r2-image";
 import type { VisitListItem } from "@/lib/queries/visit-queries";
 
 function formatUpcomingWhen(iso: string) {
@@ -43,12 +42,11 @@ export function UpcomingReservationCard({ visit }: { visit: VisitListItem }) {
         <Card className="flex items-start gap-3">
           <span className="bg-muted relative size-20 shrink-0 overflow-hidden rounded-xl">
             {thumb ? (
-              <Image
+              <R2Image
                 src={thumb}
                 alt=""
                 fill
                 sizes="80px"
-                loader={r2ImageLoader}
                 className="object-cover"
                 unoptimized
               />

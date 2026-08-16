@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Figtree, Geist_Mono, Playfair_Display } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 import "./globals.css";
@@ -21,6 +21,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Our Table",
   description: "A shared restaurant tracker for couples",
+};
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

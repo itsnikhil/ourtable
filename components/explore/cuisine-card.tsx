@@ -1,7 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Card } from "@/components/design/card";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { R2Image } from "@/components/photos/r2-image";
 
 export function CuisineCard({
   name,
@@ -21,12 +20,11 @@ export function CuisineCard({
     >
       <Card className="relative h-44 w-32 overflow-hidden p-0">
         {photoUrl ? (
-          <Image
+          <R2Image
             src={photoUrl}
             alt=""
             fill
             sizes="128px"
-            loader={r2ImageLoader}
             className="object-cover"
             unoptimized
           />

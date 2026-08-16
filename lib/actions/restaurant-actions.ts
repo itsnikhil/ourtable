@@ -18,6 +18,7 @@ import {
   setRestaurantOpinionSchema,
   updateRestaurantSchema,
   opinionTagSchema,
+  tagCategorySchema,
 } from "@/lib/validations/restaurant";
 
 type OpinionTag = z.infer<typeof opinionTagSchema>;
@@ -234,33 +235,74 @@ export async function updateRestaurant(
 
     const tagIdsToAttach: string[] = [...(tagIds ?? [])];
 
-    if (newTagNames && newTagNames.length > 0) {
-      for (const tag of newTagNames) {
-        const [existingTag] = await db
-          .select({ id: tags.id })
-          .from(tags)
-          .where(
-            and(
-              eq(tags.householdId, householdId),
-              eq(tags.name, tag.name),
-              eq(tags.category, tag.category),
-            ),
-          )
-          .limit(1);
+    async function findOrCreateTag(tag: {
+      name: string;
+      category: z.infer<typeof tagCategorySchema>;
+    }): Promise<string> {
+      const [existingTag] = await db
+        .select({ id: tags.id })
+        .from(tags)
+        .where(
+          and(
+            eq(tags.householdId, householdId),
+            eq(tags.name, tag.name),
+            eq(tags.category, tag.category),
+          ),
+        )
+        .limit(1);
 
-        if (existingTag) {
-          tagIdsToAttach.push(existingTag.id);
-        } else {
-          const [inserted] = await db
-            .insert(tags)
-            .values({
-              householdId,
-              name: tag.name,
-              category: tag.category,
-            })
-            .returning({ id: tags.id });
-          tagIdsToAttach.push(inserted.id);
-        }
+      if (existingTag) return existingTag.id;
+
+      const [inserted] = await db
+        .insert(tags)
+        .values({
+          householdId,
+          name: tag.name,
+          category: tag.category,
+        })
+        .returning({ id: tags.id });
+      return inserted.id;
+    }
+
+    if (newTagNames !== undefined) {
+      const foodTypeTags = newTagNames.filter((t) => t.category === "FOOD_TYPE");
+      const otherTags = newTagNames.filter((t) => t.category !== "FOOD_TYPE");
+
+      const desiredFoodTypeIds: string[] = [];
+      for (const tag of foodTypeTags) {
+        desiredFoodTypeIds.push(await findOrCreateTag(tag));
+      }
+
+      const currentFoodType = await db
+        .select({
+          tagId: restaurantTags.tagId,
+        })
+        .from(restaurantTags)
+        .innerJoin(tags, eq(restaurantTags.tagId, tags.id))
+        .where(
+          and(
+            eq(restaurantTags.restaurantId, id),
+            eq(tags.category, "FOOD_TYPE"),
+          ),
+        );
+
+      const desiredSet = new Set(desiredFoodTypeIds);
+      const toRemove = currentFoodType.filter((row) => !desiredSet.has(row.tagId));
+      if (toRemove.length > 0) {
+        await db.delete(restaurantTags).where(
+          and(
+            eq(restaurantTags.restaurantId, id),
+            inArray(
+              restaurantTags.tagId,
+              toRemove.map((row) => row.tagId),
+            ),
+          ),
+        );
+      }
+
+      tagIdsToAttach.push(...desiredFoodTypeIds);
+      for (const tag of otherTags) {
+        tagIdsToAttach.push(await findOrCreateTag(tag));
       }
     }
 

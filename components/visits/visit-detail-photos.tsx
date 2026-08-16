@@ -1,7 +1,6 @@
-import Image from "next/image";
 import { ChevronRight } from "lucide-react";
 import { PhotoGallery } from "@/components/photos/photo-gallery";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { R2Image } from "@/components/photos/r2-image";
 import type { PhotoDto } from "@/lib/queries/photo-queries";
 
 const VISIBLE = 4;
@@ -31,12 +30,11 @@ export function VisitDetailPhotos({
                   key={photo.id}
                   className="bg-muted relative aspect-square min-w-0 flex-1 overflow-hidden rounded-xl"
                 >
-                  <Image
+                  <R2Image
                     src={photo.url}
                     alt=""
                     fill
                     sizes="80px"
-                    loader={r2ImageLoader}
                     className="object-cover"
                     unoptimized
                   />

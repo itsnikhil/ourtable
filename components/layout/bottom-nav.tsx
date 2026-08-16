@@ -17,7 +17,7 @@ export function BottomNav() {
 
   return (
     <nav className="bg-card/95 fixed inset-x-0 bottom-0 z-40 shadow-card backdrop-blur">
-      <ul className="relative mx-auto flex max-w-lg items-end justify-between px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <ul className="relative mx-auto flex max-w-lg items-end justify-between px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {sideItems.slice(0, 2).map((item) => (
           <SideItem key={item.href} item={item} pathname={pathname} />
         ))}

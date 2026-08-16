@@ -6,9 +6,13 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { createRestaurant } from "@/lib/actions/restaurant-actions";
+import {
+  createRestaurant,
+  updateRestaurant,
+} from "@/lib/actions/restaurant-actions";
 import { priceRangeSchema } from "@/lib/validations/restaurant";
 import { Button, buttonVariants } from "@/components/ui/button";
+import type { RestaurantDetail } from "@/lib/queries/restaurant-queries";
 import { cn } from "@/lib/utils";
 
 function emptyToUndef(v: unknown) {
@@ -17,17 +21,17 @@ function emptyToUndef(v: unknown) {
   return t.length === 0 ? undefined : t;
 }
 
+function emptyToNull(v: string | undefined): string | null {
+  if (v === undefined) return null;
+  const t = v.trim();
+  return t.length === 0 ? null : t;
+}
+
 /** UI form schema: Step 1 create fields + empty coercion + cuisine helper. */
 const addRestaurantFormSchema = z.object({
   name: z.string().min(1).max(200),
-  priceRange: z.preprocess(
-    emptyToUndef,
-    priceRangeSchema.optional(),
-  ),
-  website: z.preprocess(
-    emptyToUndef,
-    z.string().url().optional(),
-  ),
+  priceRange: z.preprocess(emptyToUndef, priceRangeSchema.optional()),
+  website: z.preprocess(emptyToUndef, z.string().url().optional()),
   phone: z.preprocess(emptyToUndef, z.string().max(30).optional()),
   address: z.preprocess(emptyToUndef, z.string().max(300).optional()),
   lat: z.preprocess(emptyToUndef, z.string().optional()),
@@ -54,7 +58,10 @@ function parseCuisine(cuisine: string | undefined) {
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 10)
-    .map((name) => ({ name: name.slice(0, 50), category: "FOOD_TYPE" as const }));
+    .map((name) => ({
+      name: name.slice(0, 50),
+      category: "FOOD_TYPE" as const,
+    }));
 }
 
 function extractMatchedId(message: string): string | null {
@@ -67,10 +74,22 @@ const fieldClass =
 
 const labelClass = "text-sm font-medium";
 
-export function AddRestaurantForm() {
+export function AddRestaurantForm({
+  restaurant,
+}: {
+  restaurant?: RestaurantDetail;
+}) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [matchedId, setMatchedId] = useState<string | null>(null);
+  const isEdit = Boolean(restaurant);
+
+  const cuisineDefault = restaurant
+    ? restaurant.tags
+        .filter((t) => t.category === "FOOD_TYPE")
+        .map((t) => t.name)
+        .join(", ")
+    : "";
 
   const {
     register,
@@ -80,17 +99,18 @@ export function AddRestaurantForm() {
   } = useForm<FormValues>({
     resolver: zodResolver(addRestaurantFormSchema),
     defaultValues: {
-      name: "",
-      address: "",
-      neighborhood: "",
-      phone: "",
-      website: "",
-      menuUrl: "",
-      notes: "",
-      cuisine: "",
-      supportsDelivery: false,
-      supportsDineIn: true,
-      supportsTakeout: false,
+      name: restaurant?.name ?? "",
+      address: restaurant?.address ?? "",
+      neighborhood: restaurant?.neighborhood ?? "",
+      phone: restaurant?.phone ?? "",
+      website: restaurant?.website ?? "",
+      menuUrl: restaurant?.menuUrl ?? "",
+      notes: restaurant?.notes ?? "",
+      cuisine: cuisineDefault,
+      priceRange: restaurant?.priceRange ?? undefined,
+      supportsDelivery: restaurant?.supportsDelivery ?? false,
+      supportsDineIn: restaurant?.supportsDineIn ?? true,
+      supportsTakeout: restaurant?.supportsTakeout ?? false,
       forceCreate: false,
     },
   });
@@ -103,24 +123,44 @@ export function AddRestaurantForm() {
       ...values,
       forceCreate: force || values.forceCreate,
     });
-    const result = await createRestaurant({
-      name: parsed.name,
-      priceRange: parsed.priceRange,
-      website: parsed.website,
-      phone: parsed.phone || undefined,
-      address: parsed.address || undefined,
-      neighborhood: parsed.neighborhood || undefined,
-      area: parsed.area || undefined,
-      lat: parsed.lat || undefined,
-      lng: parsed.lng || undefined,
-      supportsDelivery: parsed.supportsDelivery,
-      supportsDineIn: parsed.supportsDineIn,
-      supportsTakeout: parsed.supportsTakeout,
-      menuUrl: parsed.menuUrl,
-      notes: parsed.notes || undefined,
-      newTagNames: parseCuisine(parsed.cuisine),
-      forceCreate: parsed.forceCreate,
-    });
+
+    const result = restaurant
+      ? await updateRestaurant({
+          id: restaurant.id,
+          name: parsed.name,
+          priceRange: parsed.priceRange ?? null,
+          website: emptyToNull(parsed.website),
+          phone: emptyToNull(parsed.phone),
+          address: emptyToNull(parsed.address),
+          neighborhood: emptyToNull(parsed.neighborhood),
+          area: emptyToNull(parsed.area),
+          lat: emptyToNull(parsed.lat),
+          lng: emptyToNull(parsed.lng),
+          supportsDelivery: parsed.supportsDelivery,
+          supportsDineIn: parsed.supportsDineIn,
+          supportsTakeout: parsed.supportsTakeout,
+          menuUrl: emptyToNull(parsed.menuUrl),
+          notes: emptyToNull(parsed.notes),
+          newTagNames: parseCuisine(parsed.cuisine),
+        })
+      : await createRestaurant({
+          name: parsed.name,
+          priceRange: parsed.priceRange,
+          website: parsed.website,
+          phone: parsed.phone || undefined,
+          address: parsed.address || undefined,
+          neighborhood: parsed.neighborhood || undefined,
+          area: parsed.area || undefined,
+          lat: parsed.lat || undefined,
+          lng: parsed.lng || undefined,
+          supportsDelivery: parsed.supportsDelivery,
+          supportsDineIn: parsed.supportsDineIn,
+          supportsTakeout: parsed.supportsTakeout,
+          menuUrl: parsed.menuUrl,
+          notes: parsed.notes || undefined,
+          newTagNames: parseCuisine(parsed.cuisine),
+          forceCreate: parsed.forceCreate,
+        });
 
     if (!result.success) {
       setServerError(result.error.message);
@@ -171,12 +211,7 @@ export function AddRestaurantForm() {
           <label htmlFor="priceRange" className={labelClass}>
             Price
           </label>
-          <select
-            id="priceRange"
-            className={fieldClass}
-            {...register("priceRange")}
-            defaultValue=""
-          >
+          <select id="priceRange" className={fieldClass} {...register("priceRange")}>
             <option value="">—</option>
             {PRICE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
@@ -304,7 +339,11 @@ export function AddRestaurantForm() {
       ) : null}
 
       <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? "Saving…" : "Add restaurant"}
+        {isSubmitting
+          ? "Saving…"
+          : isEdit
+            ? "Save changes"
+            : "Add restaurant"}
       </Button>
     </form>
   );

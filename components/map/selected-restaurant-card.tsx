@@ -1,10 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/design/card";
 import { RatingBadge } from "@/components/design/rating-badge";
 import type { MapPinRestaurant } from "@/components/map/pin-utils";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { R2Image } from "@/components/photos/r2-image";
 import type { RestaurantDetail } from "@/lib/queries/restaurant-queries";
 
 const PRICE_LABEL: Record<string, string> = {
@@ -40,12 +39,11 @@ export function SelectedRestaurantCard({
       >
         <span className="bg-muted relative size-16 shrink-0 overflow-hidden rounded-xl">
           {photoUrl ? (
-            <Image
+            <R2Image
               src={photoUrl}
               alt=""
               fill
               sizes="64px"
-              loader={r2ImageLoader}
               className="object-cover"
               unoptimized
             />

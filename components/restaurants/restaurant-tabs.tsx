@@ -20,7 +20,7 @@ export function RestaurantTabs({
   const base = `/restaurants/${restaurantId}`;
 
   return (
-    <nav className="-mx-1 flex gap-4 overflow-x-auto pb-2 text-sm">
+    <nav className="-mx-1 flex gap-4 overflow-x-auto border-b border-border text-sm">
       {TABS.map((tab) => {
         const href = `${base}${tab.href}`;
         const isActive = tab.label === active;
@@ -29,7 +29,7 @@ export function RestaurantTabs({
             key={tab.label}
             href={href}
             className={cn(
-              "shrink-0 border-b-2 py-1.5 whitespace-nowrap",
+              "shrink-0 border-b-2 -mb-px py-1.5 whitespace-nowrap",
               isActive
                 ? "border-primary text-primary font-medium"
                 : "text-muted-foreground hover:text-foreground border-transparent",

@@ -1,7 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
 import { RatingBadge } from "@/components/design/rating-badge";
-import { r2ImageLoader } from "@/lib/photo-url";
+import { R2Image } from "@/components/photos/r2-image";
 import { cn } from "@/lib/utils";
 
 export function RestaurantRow({
@@ -30,12 +29,11 @@ export function RestaurantRow({
       ) : null}
       <span className="bg-muted relative size-14 shrink-0 overflow-hidden rounded-xl">
         {photoUrl ? (
-          <Image
+          <R2Image
             src={photoUrl}
             alt=""
             fill
             sizes="56px"
-            loader={r2ImageLoader}
             className="object-cover"
             unoptimized
           />

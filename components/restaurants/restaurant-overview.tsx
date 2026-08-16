@@ -8,6 +8,7 @@ import {
   Globe,
   MapPin,
   Navigation,
+  Pencil,
   Phone,
   Share,
   UtensilsCrossed,
@@ -178,14 +179,15 @@ export function RestaurantOverview({
             >
               <ChevronLeft className="size-6" />
             </Link>
-            <button
-              type="button"
-              onClick={onShare}
-              className="text-surface-inverse-foreground inline-flex size-10 items-center justify-center"
-              aria-label="Share"
-            >
-              <Share className="size-5" />
-            </button>
+            <div className="flex items-center">
+              <Link
+                href={`/restaurants/${restaurant.id}/edit`}
+                className="text-surface-inverse-foreground inline-flex size-10 items-center justify-center"
+                aria-label="Edit restaurant"
+              >
+                <Pencil className="size-5" />
+              </Link>
+            </div>
           </div>
 
           <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
@@ -199,7 +201,7 @@ export function RestaurantOverview({
             ) : null}
           </div>
 
-          <div className="grid grid-cols-4 gap-2 px-4 pb-16">
+          <div className="grid grid-cols-4 gap-3 px-4 pb-20">
             <HeroAction
               href={restaurant.website ?? undefined}
               label="Website"
@@ -227,8 +229,8 @@ export function RestaurantOverview({
         </div>
       </div>
 
-      <div className="relative -mt-8 rounded-t-[32px] bg-card px-4 pt-16 pb-8">
-        <Card className="absolute inset-x-4 -top-10 flex items-center gap-4 py-4">
+      <div className="relative -mt-6 rounded-t-[32px] bg-card px-4 pt-16 pb-8">
+        <Card className="absolute inset-x-4 -top-12 flex items-center gap-4 py-4">
           <RatingBadge
             value={restaurant.averageRating}
             className="min-w-0 border-0 bg-transparent px-0 py-0 text-4xl font-bold"
@@ -250,9 +252,9 @@ export function RestaurantOverview({
 
         {tabs}
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-5">
           {restaurant.address ? (
-            <div className="flex items-start gap-3 text-sm">
+            <div className="flex items-start gap-4 text-sm">
               <MapPin className="text-muted-foreground mt-0.5 size-4 shrink-0" />
               <div>
                 <p>{restaurant.address}</p>
@@ -264,14 +266,14 @@ export function RestaurantOverview({
               </div>
             </div>
           ) : restaurant.neighborhood ? (
-            <div className="flex items-start gap-3 text-sm">
+            <div className="flex items-start gap-4 text-sm">
               <MapPin className="text-muted-foreground mt-0.5 size-4 shrink-0" />
               <p>{restaurant.neighborhood}</p>
             </div>
           ) : null}
 
           {featureLine ? (
-            <div className="flex items-start gap-3 text-sm">
+            <div className="flex items-start gap-4 text-sm">
               <UtensilsCrossed className="text-muted-foreground mt-0.5 size-4 shrink-0" />
               <p>{featureLine}</p>
             </div>

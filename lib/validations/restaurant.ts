@@ -40,9 +40,32 @@ export const createRestaurantSchema = z.object({
   forceCreate: z.boolean().optional(),
 });
 
+const nullableUrl = z.union([z.string().url(), z.null()]);
+const nullableText = (max: number) => z.union([z.string().max(max), z.null()]);
+
 export const updateRestaurantSchema = createRestaurantSchema.partial().extend({
   id: z.string(),
   status: restaurantStatusSchema.optional(),
+  priceRange: priceRangeSchema.nullable().optional(),
+  website: nullableUrl.optional(),
+  phone: nullableText(30).optional(),
+  address: nullableText(300).optional(),
+  lat: z.union([z.string(), z.null()]).optional(),
+  lng: z.union([z.string(), z.null()]).optional(),
+  neighborhood: nullableText(100).optional(),
+  area: nullableText(100).optional(),
+  menuUrl: nullableUrl.optional(),
+  notes: nullableText(2000).optional(),
+  tagIds: z.array(z.string()).max(30).optional(),
+  newTagNames: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(50),
+        category: tagCategorySchema,
+      }),
+    )
+    .max(10)
+    .optional(),
 });
 
 export const setRestaurantOpinionSchema = z.object({
